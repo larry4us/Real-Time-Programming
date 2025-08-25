@@ -7,5 +7,8 @@ int** createMatrix(int rows, int columns);
 void freeMatrix(int** matrix, int rows);
 void displayMatrix(int** matrix, int rows, int columns);
 int** addMatrix(int** matrixA, int** matrixB, int rows, int columns);
+void scanMatrix(int **array, int rows, int columns);
+int** alocateSpace (int rows, int columns);
+int** subMatrix(int **matrixA, int **matrixB, int rows, int columns);
 
 #endif // MATRIXOPERATIONS_H   

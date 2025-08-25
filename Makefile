@@ -2,7 +2,7 @@
 CC = gcc
 
 # Flags de compilacao (adicionada a -Iinclude aqui)
-CFLAGS = -g -Wall -std=c17 -Iinclude
+CFLAGS = -g -Wall -Iinclude
 
 # Diretorios
 SRCDIR = src

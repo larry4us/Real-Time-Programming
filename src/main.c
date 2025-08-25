@@ -3,8 +3,8 @@
 #include "matrixOperations.h"
 
 int main(void) {
-    int rows = 3;
-    int cols = 4;
+    int rows = 2;
+    int cols = 2;
 
     int **matrixA = createMatrix(rows, cols);
     int **matrixB = createMatrix(rows, cols);
@@ -14,12 +14,15 @@ int main(void) {
         return EXIT_FAILURE;
     }
 
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            matrixA[i][j] = i + j;
-            matrixB[i][j] = i * 2 + j;
-        }
-    }
+    // for (int i = 0; i < rows; i++) {
+    //     for (int j = 0; j < cols; j++) {
+    //         matrixA[i][j] = i + j;
+    //         matrixB[i][j] = i * 2 + j;
+    //     }
+    // }
+
+    scanMatrix(matrixA, rows, cols);
+    scanMatrix(matrixB, rows, cols);
 
     printf("Matrix A:\n");
     displayMatrix(matrixA, rows, cols);
@@ -28,6 +31,7 @@ int main(void) {
     displayMatrix(matrixB, rows, cols);
 
     int **matrixC = addMatrix(matrixA, matrixB, rows, cols);
+    int **matrixD = subMatrix(matrixA, matrixB, rows, cols);
 
     if (matrixC == NULL) {
         printf("Falha na alocacao de memoria para a soma.\n");
@@ -38,6 +42,9 @@ int main(void) {
 
     printf("\nResultado (A + B):\n");
     displayMatrix(matrixC, rows, cols);
+
+    printf("\nResultado (A - B):\n");
+    displayMatrix(matrixD, rows, cols);
 
     freeMatrix(matrixA, rows);
     freeMatrix(matrixB, rows);

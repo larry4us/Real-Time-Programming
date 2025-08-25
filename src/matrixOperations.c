@@ -30,39 +30,46 @@ void freeMatrix(int **matrix, int rows) {
     free(matrix);
 }
 
-void displayMatrix(int array[10][10], int rows, int columns){
-    
-
-    for (i = 0; i < rows; i++) {
-        for (j = 0; j < columns; j++){
+void displayMatrix(int **array, int rows, int columns){
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < columns; j++){
             printf("\t%d", array[i][j]);
         }
         printf("\n");
     }
 }
 
+
+int** alocateSpace (int rows, int columns) {
+    int i, j; // for Loops
+
+       // Cria a matriz de soma dinamicamente, com o tamanho exato necessário.
+       int **sum = (int **)malloc(rows * sizeof(int *));
+       if (sum == NULL) {
+           return NULL;
+       }
+       
+       
+       for (i = 0; i < rows; i++) {
+           sum[i] = (int *)malloc(columns * sizeof(int));
+           if (sum[i] == NULL) {
+                // Tratamento de erro: se falhar, libera o que já foi alocado
+               for (j = 0; j < i; j++) {
+                   free(sum[j]);
+               }
+               free(sum);
+               return NULL;
+           }
+       }
+
+       return sum;
+}
+
 int** addMatrix(int **matrixA, int **matrixB, int rows, int columns) {
-    
+
     int i, j;
 
-    // Cria a matriz de soma dinamicamente, com o tamanho exato necessário.
-    int **sum = (int **)malloc(rows * sizeof(int *));
-    if (sum == NULL) {
-        return NULL;
-    }
-    
-    
-    for (i = 0; i < rows; i++) {
-        sum[i] = (int *)malloc(columns * sizeof(int));
-        if (sum[i] == NULL) {
-             // Tratamento de erro: se falhar, libera o que já foi alocado
-            for (j = 0; j < i; j++) {
-                free(sum[j]);
-            }
-            free(sum);
-            return NULL;
-        }
-    }
+    int **sum = alocateSpace(rows, columns);
 
     // 3. Realize a soma, guardando o resultado na nova matriz.
     for (i = 0; i < rows; i++) {
@@ -75,7 +82,24 @@ int** addMatrix(int **matrixA, int **matrixB, int rows, int columns) {
     return sum;
 }
 
-void ScanMatrix(int **array, int rows, int columns){
+int** subMatrix(int **matrixA, int **matrixB, int rows, int columns) {
+
+    int i, j;
+
+    int **sub = alocateSpace(rows, columns);
+
+    // 3. Realize a soma, guardando o resultado na nova matriz.
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < columns; j++) {
+            sub[i][j] = matrixA[i][j] - matrixB[i][j];
+        }
+    }
+
+    // 4. Retorne o ponteiro para a matriz recém-criada.
+    return sub;
+}
+
+void scanMatrix(int **array, int rows, int columns){
     
     for (i = 0; i < rows; i++){
         printf("\t%d entries for row %d: ", columns, i + 1);
