@@ -2,53 +2,41 @@
 #include <stdlib.h>
 #include "matrixOperations.h"
 
-int main(void) {
-    int rows = 2;
-    int cols = 2;
+int main() {
+    // Criando duas matrizes para teste
+    Matrix* A = createMatrix(2, 3);
+    Matrix* B = createMatrix(3, 2);
 
-    int **matrixA = createMatrix(rows, cols);
-    int **matrixB = createMatrix(rows, cols);
+    scanMatrix(A);
+    printf("\n");
+    scanMatrix(B);
+    printf("\n");
 
-    if (matrixA == NULL || matrixB == NULL) {
-        printf("Falha na alocacao de memoria.\n");
-        return EXIT_FAILURE;
+    printf("--- Matriz A ---\n");
+    displayMatrix(A);
+    printf("\n--- Matriz B ---\n");
+    displayMatrix(B);
+
+    // Testando a multiplicação
+    Matrix* C = multiplyMatrix(A, B);
+    if (C != NULL) {
+        printf("\n--- Resultado A * B ---\n");
+        displayMatrix(C);
+    } else {
+        printf("\nNao foi possivel multiplicar A e B (dimensoes incompativeis).\n");
+    }
+    
+    // Testando a transposição
+    Matrix* C = transposeMatrix(C);
+    if (C != NULL) {
+        printf("\n--- Transposta de C ---\n");
+        displayMatrix(C);
     }
 
-    // for (int i = 0; i < rows; i++) {
-    //     for (int j = 0; j < cols; j++) {
-    //         matrixA[i][j] = i + j;
-    //         matrixB[i][j] = i * 2 + j;
-    //     }
-    // }
+    // Liberando toda a memória alocada
+    freeMatrix(A);
+    freeMatrix(B);
+    freeMatrix(C);
 
-    scanMatrix(matrixA, rows, cols);
-    scanMatrix(matrixB, rows, cols);
-
-    printf("Matrix A:\n");
-    displayMatrix(matrixA, rows, cols);
-
-    printf("\nMatrix B:\n");
-    displayMatrix(matrixB, rows, cols);
-
-    int **matrixC = addMatrix(matrixA, matrixB, rows, cols);
-    int **matrixD = subMatrix(matrixA, matrixB, rows, cols);
-
-    if (matrixC == NULL) {
-        printf("Falha na alocacao de memoria para a soma.\n");
-        freeMatrix(matrixA, rows);
-        freeMatrix(matrixB, rows);
-        return EXIT_FAILURE;
-    }
-
-    printf("\nResultado (A + B):\n");
-    displayMatrix(matrixC, rows, cols);
-
-    printf("\nResultado (A - B):\n");
-    displayMatrix(matrixD, rows, cols);
-
-    freeMatrix(matrixA, rows);
-    freeMatrix(matrixB, rows);
-    freeMatrix(matrixC, rows);
-
-    return EXIT_SUCCESS;
+    return 0;
 }
