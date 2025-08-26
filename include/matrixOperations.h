@@ -8,7 +8,7 @@
 typedef struct {
     int rows;
     int cols;
-    int** data;
+    double** data;
 } Matrix;
 
 
@@ -28,8 +28,14 @@ void displayMatrix(Matrix* matrix);
 Matrix* addMatrix(Matrix* a, Matrix* b);
 Matrix* subMatrix(Matrix* a, Matrix* b);
 Matrix* multiplyMatrix(Matrix* a, Matrix* b);
-Matrix* scalarMultiply(Matrix* matrix, int scalar);
+Matrix* scalarMultiply(Matrix* matrix, double scalar);
 Matrix* transposeMatrix(Matrix* matrix);
+Matrix* inverseMatrix(Matrix* matrix);
 
+double determinant(Matrix* matrix);
+
+
+// Funções internas
+Matrix* getCofactor(Matrix* matrix, int p, int q);
 
 #endif // MATRIX_H
