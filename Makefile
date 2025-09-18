@@ -1,6 +1,10 @@
 CC = gcc
 CFLAGS = -g -Wall -Iinclude
-LIBS = -lm
+# Adicione -lpthread para linkar a biblioteca de threads
+LIBS = -lm -lpthread
+
+# Adicione o interpretador Python
+PYTHON = python3
 
 SRC_DIR = src
 TEST_DIR = tests
@@ -28,12 +32,14 @@ INTEGRATION_TEST_TARGET = $(BIN_DIR)/teste_integracao
 
 # --- Regras ---
 
-.PHONY: all test run-tests clean
+.PHONY: all test run-tests clean plot
 
 all: $(APP_TARGET)
-	@echo "\n--- Compilacao concluida. Rodando testes automaticamente ---"
-	@echo "--- Rodando Testes de Matriz ---"
-	make run-tests
+
+# NOVA REGRA: Roda a simulação e depois o script de plotagem
+plot: $(APP_TARGET)
+	@echo "--- Gerando o gráfico da trajetória ---"
+	$(PYTHON) plot_trajectory.py
 
 test: $(MATRIX_TEST_TARGET) $(INTEGRATION_TEST_TARGET)
 
@@ -46,6 +52,8 @@ run-tests: test
 $(APP_TARGET): $(APP_MAIN_OBJ) $(LIB_OBJECTS)
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(LIBS)
+	@echo "--- Executando a simulação...---"
+	./$(APP_TARGET)
 
 $(MATRIX_TEST_TARGET): $(MATRIX_TEST_OBJ) $(OBJ_DIR)/matrixOperations.o
 	@mkdir -p $(BIN_DIR)
@@ -64,4 +72,4 @@ $(OBJ_DIR)/%.o: $(TEST_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(BIN_DIR) $(OBJ_DIR)
+	rm -rf $(BIN_DIR) $(OBJ_DIR) simulation_output.txt *.png
