@@ -5,8 +5,8 @@ Trabalhos feitos pra matéria de Programacao em Tempo Real, no intuito de aprend
 ## LAB2
 Para este segundo trabalho, a execução da simulação é o ponto mais importante. Portanto, o arquivo .txt do resultado da simulação é sempre gerado. Mas pra uma visualização mais conveniente, um gráfico usando o Pandas e o MatplotLib do Python vai auxiliar. Mas isso exige novos módulos que podem ser facilmente instalado usando:
 
-sudo apt update
-sudo apt install python3-pandas python3-matplotlib
+- sudo apt update
+- sudo apt install python3-pandas python3-matplotlib
 
 ## LAB1
 
