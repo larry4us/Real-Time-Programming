@@ -7,7 +7,7 @@ def plot_robot_trajectory():
     """
     try:
         # Lê o arquivo de dados. O separador '\t' indica que as colunas são separadas por tabs.
-        df = pd.read_csv('simulation_output.txt', sep='\t')
+        df = pd.read_csv('output/simulation_output.txt', sep='\t')
 
         # Verifica se o DataFrame tem as colunas necessárias
         if 'x' not in df.columns or 'y' not in df.columns:
@@ -35,7 +35,7 @@ def plot_robot_trajectory():
         plt.legend()
 
         # Salva o gráfico em um arquivo de imagem
-        plt.savefig('trajetoria_robo.png')
+        plt.savefig('output/trajetoria_robo.png')
         print("Gráfico da trajetória salvo com sucesso como 'trajetoria_robo.png'")
 
     except FileNotFoundError:

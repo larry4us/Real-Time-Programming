@@ -79,88 +79,131 @@ Matrix* differential_x_matrix(Matrix* u, double theta) {
     return result;
 }
 
+/**
+ * @brief Thread 2: Simulador (Período Nominal: 50ms).
+ * - Acorda e avança o tempo da simulação.
+ * - Calcula o vetor de entrada u(t).
+ * - Calcula a derivada do estado ẋ(t).
+ * - Integra para obter o novo estado y(t) e o atualiza na memória compartilhada.
+ * - Mede o tempo real desde sua última execução (período T(k)).
+ * - Salva o período em 'thread2_timing.txt'.
+ */
 void* thread2_func(void* arg) {
-    double dt = THREAD2_PERIOD_MS / 1000.0; // Intervalo de tempo (0.05s)
+    // Abre o arquivo para escrita dos tempos
+    FILE* timing_file = fopen("output/thread2_timing.txt", "w");
+    if (timing_file == NULL) {
+        perror("Erro ao abrir thread2_timing.txt");
+        return NULL;
+    }
+    fprintf(timing_file, "T(k)\n");
+
+    struct timespec last_time, current_time_spec;
+    clock_gettime(CLOCK_MONOTONIC, &last_time); // Tempo inicial
+
+    double simulation_step_time = THREAD2_PERIOD_MS / 1000.0;
 
     while (current_time <= SIMULATION_TIME) {
-        // --- 1. Ler u(t) da área compartilhada ---
-        pthread_mutex_lock(&u_mutex);
-        Matrix* u = u_matrix(current_time); 
-        pthread_mutex_unlock(&u_mutex);
+        // --- MEDIÇÃO DE TEMPO (INÍCIO) ---
+        clock_gettime(CLOCK_MONOTONIC, &current_time_spec);
+        double delta_s = (current_time_spec.tv_sec - last_time.tv_sec);
+        double delta_ns = (current_time_spec.tv_nsec - last_time.tv_nsec);
+        double period_ms = delta_s * 1000.0 + delta_ns / 1e6;
+        fprintf(timing_file, "%f\n", period_ms);
+        last_time = current_time_spec;
+        // --- MEDIÇÃO DE TEMPO (FIM) ---
 
-        // --- 2. Obter o theta atual ---
+        // Para a simulação COM CARGA, descomente a linha abaixo
+        // simulate_load();
+
+        // --- Lógica da Simulação ---
+        Matrix* u = u_matrix(current_time);
+
         pthread_mutex_lock(&y_mutex);
         double current_theta = shared_y->data[2][0];
-        pthread_mutex_unlock(&y_mutex);
-
-        // --- 3. Calcular ẋ(t) ---
+        
         Matrix* y_dot = differential_x_matrix(u, current_theta);
-        
-        // --- 4. INTEGRAR (Método de Euler) ---
-        Matrix* term = scalarMultiply(y_dot, dt);
-        
-        pthread_mutex_lock(&y_mutex);
+        Matrix* term = scalarMultiply(y_dot, simulation_step_time);
         Matrix* y_next = addMatrix(shared_y, term);
         
-        // Atualiza a variável compartilhada
         freeMatrix(shared_y);
         shared_y = y_next;
         pthread_mutex_unlock(&y_mutex);
-
-        // Libera memória
+        
         freeMatrix(u);
         freeMatrix(y_dot);
         freeMatrix(term);
         
-        // Dorme pelo período da thread
+        // Avança o tempo global da simulação e dorme
+        current_time += simulation_step_time;
         usleep(THREAD2_PERIOD_MS * 1000);
     }
+
+    fclose(timing_file);
     return NULL;
 }
 
-/*
- * Thread 1: Gerador de Entrada e Amostrador (Período: 30ms)
- * - Gera o vetor de entrada u(t).
- * - Lê o vetor de estado y(t) do simulador.
- * - Salva os dados (t, u(t), y(t)) em um arquivo.
+/**
+ * @brief Thread 1: Logger (Período Nominal: 30ms).
+ * - Acorda, lê o estado atual da simulação (y(t)).
+ * - Salva o estado em 'simulation_output.txt'.
+ * - Mede o tempo real desde sua última execução (período T(k)).
+ * - Salva o período em 'thread1_timing.txt'.
  */
 void* thread1_func(void* arg) {
-    FILE* output_file = fopen("simulation_output.txt", "w");
+    // Abre os arquivos para escrita
+    FILE* output_file = fopen("output/simulation_output.txt", "w");
     if (output_file == NULL) {
-        perror("Erro ao abrir o arquivo de saída");
+        perror("Erro ao abrir simulation_output.txt");
         return NULL;
     }
     fprintf(output_file, "t\tv\tw\tx\ty\ttheta\n");
 
+    FILE* timing_file = fopen("output/thread1_timing.txt", "w");
+    if (timing_file == NULL) {
+        perror("Erro ao abrir thread1_timing.txt");
+        fclose(output_file);
+        return NULL;
+    }
+    fprintf(timing_file, "T(k)\n");
+
+    struct timespec last_time, current_time_spec;
+    clock_gettime(CLOCK_MONOTONIC, &last_time); // Tempo inicial
+
     while (current_time <= SIMULATION_TIME) {
-        // --- 1. Gera e compartilha u(t) ---
-        // (A Thread 2 também calcula u(t), mas em um sistema real, a Thread 1
-        // seria a única a definir o valor compartilhado. Para simplificar,
-        // vamos apenas calcular os valores para o log aqui)
-        Matrix* u = u_matrix(current_time);
-        
-        // --- 2. Lê y(t) da área compartilhada ---
+        // --- MEDIÇÃO DE TEMPO (INÍCIO) ---
+        clock_gettime(CLOCK_MONOTONIC, &current_time_spec);
+        double delta_s = (current_time_spec.tv_sec - last_time.tv_sec);
+        double delta_ns = (current_time_spec.tv_nsec - last_time.tv_nsec);
+        double period_ms = delta_s * 1000.0 + delta_ns / 1e6;
+        fprintf(timing_file, "%f\n", period_ms);
+        last_time = current_time_spec;
+        // --- MEDIÇÃO DE TEMPO (FIM) ---
+
+        // Para a simulação COM CARGA, descomente a linha abaixo
+        // simulate_load();
+
+        // --- Leitura e Log dos Dados da Simulação ---
         pthread_mutex_lock(&y_mutex);
+        double time_snapshot = current_time;
         double x_pos = shared_y->data[0][0];
         double y_pos = shared_y->data[1][0];
         double theta = shared_y->data[2][0];
         pthread_mutex_unlock(&y_mutex);
 
-        // --- 3. Salva os dados no arquivo ---
-        fprintf(output_file, "%f\t%f\t%f\t%f\t%f\t%f\n", 
-                current_time, 
-                u->data[0][0], // v
-                u->data[1][0], // ω
-                x_pos, y_pos, theta);
-        
-        freeMatrix(u);
+        Matrix* u_log = u_matrix(time_snapshot);
+        if (u_log) {
+            fprintf(output_file, "%f\t%f\t%f\t%f\t%f\t%f\n",
+                    time_snapshot, u_log->data[0][0], u_log->data[1][0],
+                    x_pos, y_pos, theta);
+            freeMatrix(u_log);
+        }
 
-        // Dorme e atualiza o tempo
+        // Dorme pelo período nominal
         usleep(THREAD1_PERIOD_MS * 1000);
-        current_time += (THREAD1_PERIOD_MS / 1000.0);
     }
 
     fclose(output_file);
+    fclose(timing_file);
     return NULL;
 }
 

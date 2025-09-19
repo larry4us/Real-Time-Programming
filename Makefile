@@ -10,6 +10,8 @@ SRC_DIR = src
 TEST_DIR = tests
 BIN_DIR = bin
 OBJ_DIR = obj
+DISPLAY_SCRIPT_DIR = displayScripts
+OUTPUT_DIR = output
 
 # --- Fontes da Biblioteca ---
 LIB_SOURCES = $(SRC_DIR)/matrixOperations.c $(SRC_DIR)/integration.c
@@ -30,6 +32,10 @@ INTEGRATION_TEST_SRC = $(TEST_DIR)/integrationTests.c
 INTEGRATION_TEST_OBJ = $(OBJ_DIR)/integrationTests.o
 INTEGRATION_TEST_TARGET = $(BIN_DIR)/teste_integracao
 
+# --- Scripts para exibir os outputs ---
+PLOT_TRAJECTORY = $(DISPLAY_SCRIPT_DIR)/plot_trajectory.py
+ANALYZE_TIMING = $(DISPLAY_SCRIPT_DIR)/analyze_timing.py
+
 # --- Regras ---
 
 .PHONY: all test run-tests clean plot
@@ -39,7 +45,8 @@ all: $(APP_TARGET)
 # NOVA REGRA: Roda a simulação e depois o script de plotagem
 plot: $(APP_TARGET)
 	@echo "--- Gerando o gráfico da trajetória ---"
-	$(PYTHON) plot_trajectory.py
+	$(PYTHON) $(PLOT_TRAJECTORY)
+	$(PYTHON) $(ANALYZE_TIMING)
 
 test: $(MATRIX_TEST_TARGET) $(INTEGRATION_TEST_TARGET)
 
@@ -48,6 +55,10 @@ run-tests: test
 	./$(MATRIX_TEST_TARGET)
 	@echo "\n--- Rodando Testes de Integracao ---"
 	./$(INTEGRATION_TEST_TARGET)
+
+analyze:
+	@echo "--- Gerando a tabela de análise de tempo ---"
+	$(PYTHON) analyze_timing.py
 
 $(APP_TARGET): $(APP_MAIN_OBJ) $(LIB_OBJECTS)
 	@mkdir -p $(BIN_DIR)
@@ -72,4 +83,4 @@ $(OBJ_DIR)/%.o: $(TEST_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(BIN_DIR) $(OBJ_DIR) simulation_output.txt *.png
+	rm -rf $(BIN_DIR) $(OBJ_DIR) *.txt *.png
