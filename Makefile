@@ -1,9 +1,6 @@
 CC = gcc
 CFLAGS = -g -Wall -Iinclude
-# Adicione -lpthread para linkar a biblioteca de threads
 LIBS = -lm -lpthread
-
-# Adicione o interpretador Python
 PYTHON = python3
 
 SRC_DIR = src
@@ -83,4 +80,4 @@ $(OBJ_DIR)/%.o: $(TEST_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(BIN_DIR) $(OBJ_DIR) *.txt *.png
+	rm -rf $(BIN_DIR) $(OBJ_DIR) $(OUTPUT_DIR) *.txt *.png

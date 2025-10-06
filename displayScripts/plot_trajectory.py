@@ -3,43 +3,41 @@ import matplotlib.pyplot as plt
 
 def plot_robot_trajectory():
     """
-    Lê os dados da simulação e plota a trajetória 2D do robô.
+    Lê os dados da simulação e plota a trajetória 2D do robô e a referência.
     """
     try:
-        # Lê o arquivo de dados. O separador '\t' indica que as colunas são separadas por tabs.
         df = pd.read_csv('output/simulation_output.txt', sep='\t')
 
-        # Verifica se o DataFrame tem as colunas necessárias
-        if 'x' not in df.columns or 'y' not in df.columns:
-            print("Erro: O arquivo 'simulation_output.txt' não contém as colunas 'x' e 'y'.")
+        required_cols = ['x', 'y', 'xref', 'yref']
+        if not all(col in df.columns for col in required_cols):
+            print(f"Erro: O arquivo de saída não contém as colunas necessárias: {required_cols}")
             return
 
-        # Cria a figura para o gráfico
         plt.figure(figsize=(10, 8))
 
-        # Plota a trajetória (y no eixo vertical, x no eixo horizontal)
-        plt.plot(df['x'], df['y'], marker='.', linestyle='-', label='Trajetória do Robô')
+        # Plota a trajetória real do robô
+        plt.plot(df['x'], df['y'], marker='.', linestyle='-', label='Trajetória do Robô (y(t))')
+        
+        # Plota a trajetória de referência
+        plt.plot(df['xref'], df['yref'], linestyle='--', color='gray', label='Referência (ref)')
 
-        # Adiciona marcadores para o início e o fim da trajetória
         plt.scatter(df['x'].iloc[0], df['y'].iloc[0], color='green', s=100, zorder=5, label='Início')
         plt.scatter(df['x'].iloc[-1], df['y'].iloc[-1], color='red', s=100, zorder=5, label='Fim')
 
-        # Configurações do gráfico para melhor visualização
-        plt.title('Trajetória do Robô (Visão Superior)')
+        plt.title('Trajetória do Robô vs. Referência (Visão Superior)')
         plt.xlabel('Posição X (metros)')
         plt.ylabel('Posição Y (metros)')
         plt.grid(True)
         plt.axhline(0, color='grey', lw=0.5)
         plt.axvline(0, color='grey', lw=0.5)
-        plt.gca().set_aspect('equal', adjustable='box') # Garante que as escalas de X e Y sejam iguais
+        plt.gca().set_aspect('equal', adjustable='box')
         plt.legend()
 
-        # Salva o gráfico em um arquivo de imagem
-        plt.savefig('output/trajetoria_robo.png')
-        print("Gráfico da trajetória salvo com sucesso como 'trajetoria_robo.png'")
+        plt.savefig('output/trajetoria_robo_lab3.png')
+        print("Gráfico da trajetória salvo com sucesso como 'trajetoria_robo_lab3.png'")
 
     except FileNotFoundError:
-        print("Erro: Arquivo 'simulation_output.txt' não encontrado. Execute a simulação em C primeiro.")
+        print("Erro: Arquivo 'simulation_output.txt' não encontrado. Execute a simulação primeiro.")
     except Exception as e:
         print(f"Ocorreu um erro inesperado ao gerar o gráfico: {e}")
 
