@@ -2,6 +2,11 @@
 
 Trabalhos feitos pra matéria de Programacao em Tempo Real, no intuito de aprender sobre sistemas RTOS.
 
+## LAB3
+Neste terceiro trabalho, aleḿ das recomendações anteriores, também adicionei uma visualização em PDF pra deixar a exibição dos dados mais conveniente. Por isso, há um novo módulo reportLab (gerenciador de PDF) que pode ser instalado facilmente com:
+
+sudo apt install python3-reportlab
+
 ## LAB22
 Para este segundo trabalho, a execução da simulação é o ponto mais importante. Portanto, o arquivo .txt do resultado da simulação é sempre gerado. Mas pra uma visualização mais conveniente, um gráfico usando o Pandas e o MatplotLib do Python vai auxiliar. Mas isso exige novos módulos que podem ser facilmente instalado usando:
 
