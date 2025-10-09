@@ -4,9 +4,10 @@
 #include <unistd.h>
 #include <math.h>
 #include <stdbool.h>
-#include <time.h>
 #include "matrixOperations.h"
-// #include <linux/time.h>
+#include <sys/time.h>
+#include <time.h>
+
 
 // --- Constantes da Simulação ---
 #define SIMULATION_TIME 20.0
@@ -145,8 +146,14 @@ int main() {
 
 void* reference_generation_thread(void* arg) {
     FILE* timing_file = fopen("output/ref_gen_timing.txt", "w");
+    if (!timing_file) {
+        perror("Erro ao abrir o arquivo de timing da geração de referência");
+        return NULL;
+    }
     struct timespec last_time;
     clock_gettime(CLOCK_MONOTONIC, &last_time);
+
+    fprintf(timing_file, "T(k)\n");
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&time_mutex);
@@ -170,11 +177,17 @@ void* reference_generation_thread(void* arg) {
 
 void* ref_model_x_thread(void* arg) {
     FILE* timing_file = fopen("output/ref_model_x_timing.txt", "w");
+    if (!timing_file) {
+        perror("Erro ao abrir o arquivo de timing do modelo de referência X");
+        return NULL;
+    }
     struct timespec last_time;
     clock_gettime(CLOCK_MONOTONIC, &last_time);
 
     double ymx = 0.0;
     double dt = REF_MODEL_X_PERIOD_MS / 1000.0;
+
+    fprintf(timing_file, "T(k)\n");
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&ref_input_mutex);
@@ -205,8 +218,14 @@ void* ref_model_x_thread(void* arg) {
 
 void* ref_model_y_thread(void* arg) {
     FILE* timing_file = fopen("output/ref_model_y_timing.txt", "w");
+    if (!timing_file) {
+        perror("Erro ao abrir o arquivo de timing do modelo de referência Y");
+        return NULL;
+    }
     struct timespec last_time;
     clock_gettime(CLOCK_MONOTONIC, &last_time);
+    
+    fprintf(timing_file, "T(k)\n");
 
     double ymy = 0.0;
     double dt = REF_MODEL_Y_PERIOD_MS / 1000.0;
@@ -240,8 +259,14 @@ void* ref_model_y_thread(void* arg) {
 
 void* control_thread(void* arg) {
     FILE* timing_file = fopen("output/control_timing.txt", "w");
+    if (!timing_file) {
+        perror("Erro ao abrir o arquivo de timing do controle");
+        return NULL;
+    }
     struct timespec last_time;
     clock_gettime(CLOCK_MONOTONIC, &last_time);
+
+    fprintf(timing_file, "T(k)\n");
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&y_output_mutex);
@@ -281,8 +306,14 @@ void* control_thread(void* arg) {
 
 void* linearization_thread(void* arg) {
     FILE* timing_file = fopen("output/linearization_timing.txt", "w");
+    if (!timing_file) {
+        perror("Erro ao abrir o arquivo de timing da linearização");
+        return NULL;
+    }
     struct timespec last_time;
     clock_gettime(CLOCK_MONOTONIC, &last_time);
+
+    fprintf(timing_file, "T(k)\n");
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&x_state_mutex);
@@ -326,10 +357,16 @@ void* linearization_thread(void* arg) {
 
 void* robot_simulation_thread(void* arg) {
     FILE* timing_file = fopen("output/robot_sim_timing.txt", "w");
+    if (!timing_file) {
+        perror("Erro ao abrir o arquivo de timing do robô");
+        return NULL;
+    }
     struct timespec last_time;
     clock_gettime(CLOCK_MONOTONIC, &last_time);
     
     double dt = ROBOT_SIM_PERIOD_MS / 1000.0;
+
+    fprintf(timing_file, "T(k)\n");
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&u_input_mutex);
@@ -388,9 +425,16 @@ void* robot_simulation_thread(void* arg) {
 
 void* logger_thread(void* arg) {
     FILE* output_file = fopen("output/simulation_output.txt", "w");
+    if (!output_file) {
+        perror("Erro ao abrir o arquivo de saída");
+        return NULL;
+    }
     fprintf(output_file, "t\tx\ty\ttheta\txref\tyref\n");
 
     FILE* timing_file = fopen("output/logger_timing.txt", "w");
+
+    fprintf(timing_file, "T(k)\n");
+    
     struct timespec last_time;
     clock_gettime(CLOCK_MONOTONIC, &last_time);
 

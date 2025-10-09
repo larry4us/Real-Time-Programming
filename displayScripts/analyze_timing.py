@@ -1,5 +1,18 @@
 import pandas as pd
 import numpy as np
+import os
+import platform
+import subprocess
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+
+# Caminho absoluto da pasta onde este script está
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Caminho da pasta "output" (um nível acima)
+OUTPUT_DIR = os.path.join(BASE_DIR, "..", "output")
 
 def analyze(filename, nominal_period):
     """Calcula as estatísticas para um dado arquivo de tempos."""
@@ -9,7 +22,7 @@ def analyze(filename, nominal_period):
             print(f"Arquivo '{filename}' está vazio ou não tem a coluna 'T(k)'.")
             return None
             
-        T_k = df['T(k)'][df['T(k)'] > 1] # Ignora o primeiro valor que costuma ser pequeno
+        T_k = df['T(k)'][df['T(k)'] > 1]  # Ignora o primeiro valor que costuma ser pequeno
         
         if T_k.empty:
             print(f"Não há dados válidos de T(k) em '{filename}'.")
@@ -32,31 +45,89 @@ def analyze(filename, nominal_period):
         print(f"Arquivo de análise '{filename}' não encontrado.")
         return None
 
-def print_table(stats, title):
-    """Imprime a tabela de estatísticas de forma formatada."""
-    print(f"\n--- {title} ---")
-    print("-" * 75)
-    print(f"{'Métrica':<15} | {'Média (ms)':>12} | {'Variância':>12} | {'Desv. Padrão':>15} | {'Mín/Máx (ms)':>18}")
-    print("-" * 75)
+def gerar_pdf(relatorio_dados, output_path):
+    """Gera o PDF formatado com as tabelas de estatísticas."""
+    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(output_path, pagesize=A4)
+    elementos = []
     
-    for metric, values in stats.items():
-        min_max_str = f"{values['Mínimo']:.2f} / {values['Máximo']:.2f}"
-        print(f"{metric:<15} | {values['Média']:>12.2f} | {values['Variância']:>12.2f} | {values['Desvio Padrão']:>15.2f} | {min_max_str:>18}")
-    print("-" * 75)
+    elementos.append(Paragraph("<b>Relatório de Análise de Tempos</b>", styles["Title"]))
+    elementos.append(Spacer(1, 20))
+    
+    for title, stats in relatorio_dados:
+        elementos.append(Paragraph(f"<b>{title}</b>", styles["Heading2"]))
+        elementos.append(Spacer(1, 10))
+        
+        data = [["Métrica", "Média (ms)", "Variância", "Desv. Padrão", "Mín/Máx (ms)"]]
+        for metric, values in stats.items():
+            min_max_str = f"{values['Mínimo']:.2f} / {values['Máximo']:.2f}"
+            data.append([
+                metric,
+                f"{values['Média']:.2f}",
+                f"{values['Variância']:.2f}",
+                f"{values['Desvio Padrão']:.2f}",
+                min_max_str,
+            ])
+        
+        tabela = Table(data, hAlign="LEFT")
+        tabela.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ]))
+        
+        elementos.append(tabela)
+        elementos.append(Spacer(1, 20))
+    
+    doc.build(elementos)
 
 if __name__ == '__main__':
-    # Dicionário com os arquivos de timing e seus períodos nominais
     timing_files = {
-        "Análise da Geração de Referência (120ms)": ('output/ref_gen_timing.txt', 120.0),
-        "Análise do Modelo de Referência X (50ms)": ('output/ref_model_x_timing.txt', 50.0),
-        "Análise do Modelo de Referência Y (50ms)": ('output/ref_model_y_timing.txt', 50.0),
-        "Análise do Controle (50ms)": ('output/control_timing.txt', 50.0),
-        "Análise da Linearização (40ms)": ('output/linearization_timing.txt', 40.0),
-        "Análise da Simulação do Robô (30ms)": ('output/robot_sim_timing.txt', 30.0),
-        "Análise do Logger (100ms)": ('output/logger_timing.txt', 100.0)
+        "Análise da Geração de Referência (120ms)": (
+            os.path.join(OUTPUT_DIR, "ref_gen_timing.txt"), 120.0
+        ),
+        "Análise do Modelo de Referência X (50ms)": (
+            os.path.join(OUTPUT_DIR, "ref_model_x_timing.txt"), 50.0
+        ),
+        "Análise do Modelo de Referência Y (50ms)": (
+            os.path.join(OUTPUT_DIR, "ref_model_y_timing.txt"), 50.0
+        ),
+        "Análise do Controle (50ms)": (
+            os.path.join(OUTPUT_DIR, "control_timing.txt"), 50.0
+        ),
+        "Análise da Linearização (40ms)": (
+            os.path.join(OUTPUT_DIR, "linearization_timing.txt"), 40.0
+        ),
+        "Análise da Simulação do Robô (30ms)": (
+            os.path.join(OUTPUT_DIR, "robot_sim_timing.txt"), 30.0
+        ),
+        "Análise do Logger (100ms)": (
+            os.path.join(OUTPUT_DIR, "logger_timing.txt"), 100.0
+        ),
     }
 
+    relatorio = []
     for title, (filename, period) in timing_files.items():
         stats = analyze(filename, period)
         if stats:
-            print_table(stats, title)
+            relatorio.append((title, stats))
+
+    if not relatorio:
+        print("Nenhum dado válido para gerar o relatório.")
+    else:
+        pdf_path = os.path.join(OUTPUT_DIR, "analise_timing_resultados.pdf")
+        gerar_pdf(relatorio, pdf_path)
+        print(f"\n✅ Relatório PDF gerado em: {pdf_path}")
+
+        # Abre automaticamente o PDF no visualizador padrão
+        try:
+            system_name = platform.system()
+            if system_name == "Linux":
+                subprocess.run(["xdg-open", pdf_path])
+            elif system_name == "Darwin":  # macOS
+                subprocess.run(["open", pdf_path])
+            elif system_name == "Windows":
+                os.startfile(pdf_path)
+        except Exception as e:
+            print(f"Não foi possível abrir o arquivo automaticamente: {e}")
