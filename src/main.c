@@ -7,7 +7,8 @@
 #include "matrixOperations.h"
 #include <sys/time.h>
 #include <time.h>
-
+#include <termios.h> // Para controle do terminal
+#include <fcntl.h>   // Para controle de arquivos
 
 // --- Constantes da Simulação ---
 #define SIMULATION_TIME 20.0
@@ -68,7 +69,8 @@ void* control_thread(void* arg);
 void* ref_model_x_thread(void* arg);
 void* ref_model_y_thread(void* arg);
 void* reference_generation_thread(void* arg);
-void* logger_thread(void* arg);
+// void* logger_thread(void* arg);
+void* user_interface_thread(void* arg);
 
 void write_timing_info(FILE* file, struct timespec* last_time) {
     struct timespec current_spec;
@@ -81,7 +83,6 @@ void write_timing_info(FILE* file, struct timespec* last_time) {
     }
     *last_time = current_spec;
 }
-
 
 // --- Função Principal ---
 int main() {
@@ -114,7 +115,8 @@ int main() {
     pthread_create(&tid_control, NULL, control_thread, NULL);
     pthread_create(&tid_linear, NULL, linearization_thread, NULL);
     pthread_create(&tid_robot, NULL, robot_simulation_thread, NULL);
-    pthread_create(&tid_logger, NULL, logger_thread, NULL);
+    //pthread_create(&tid_logger, NULL, logger_thread, NULL);
+    pthread_create(&tid_logger, NULL, user_interface_thread, NULL);
 
     // Aguarda o término das threads
     pthread_join(tid_logger, NULL);
@@ -143,6 +145,15 @@ int main() {
 }
 
 // --- Implementação das Threads ---
+
+// Executa cálculos intensos pra simular uma carga de trabalho na CPU.
+void simulate_load(long duration_ms) {
+    long iterations = duration_ms * 10000; // Ajuste conforme necessário. Depende do hardware de quem está executando
+    double result = 0.0;
+    for (long i = 0; i < iterations; i++) {
+        result += sin(i) * tan(i);
+    }
+}
 
 void* reference_generation_thread(void* arg) {
     FILE* timing_file = fopen("output/ref_gen_timing.txt", "w");
@@ -423,22 +434,45 @@ void* robot_simulation_thread(void* arg) {
     return NULL;
 }
 
-void* logger_thread(void* arg) {
+void* user_interface_thread(void* arg) {
     FILE* output_file = fopen("output/simulation_output.txt", "w");
     if (!output_file) {
         perror("Erro ao abrir o arquivo de saída");
         return NULL;
     }
+    //fprintf(output_file, "t\ty1\ty2\ttheta\txref\tyref\n");
     fprintf(output_file, "t\tx\ty\ttheta\txref\tyref\n");
 
     FILE* timing_file = fopen("output/logger_timing.txt", "w");
-
     fprintf(timing_file, "T(k)\n");
     
     struct timespec last_time;
     clock_gettime(CLOCK_MONOTONIC, &last_time);
 
+    // --- Configuração do terminal para leitura não bloqueante ---
+    struct termios oldt, newt;
+    int ch;
+    int oldf;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+    // ---------------------------------------------------------
+
     while (current_time < SIMULATION_TIME) {
+        // --- Leitura do teclado para alterar alphas ---
+        ch = getchar();
+        if (ch != EOF) {
+            pthread_mutex_lock(&alpha_mutex);
+            if (ch == 'q') alpha1 += 0.1;
+            if (ch == 'a') alpha1 = (alpha1 > 0.1) ? alpha1 - 0.1 : 0.1;
+            if (ch == 'w') alpha2 += 0.1;
+            if (ch == 's') alpha2 = (alpha2 > 0.1) ? alpha2 - 0.1 : 0.1;
+            pthread_mutex_unlock(&alpha_mutex);
+        }
+
         pthread_mutex_lock(&time_mutex);
         double t = current_time;
         pthread_mutex_unlock(&time_mutex);
@@ -456,14 +490,38 @@ void* logger_thread(void* arg) {
         double xref = ref_input->data[0][0];
         double yref = ref_input->data[1][0];
         pthread_mutex_unlock(&ref_input_mutex);
+        
+        pthread_mutex_lock(&alpha_mutex);
+        double a1_val = alpha1;
+        double a2_val = alpha2;
+        pthread_mutex_unlock(&alpha_mutex);
 
+        // --- Exibição na Tela ---
+        printf("\033[H\033[J"); // Limpa o console
+        printf("--- Simulação Robô Lab 3 ---\n");
+        printf("Tempo: %.2f / %.2f s\n\n", t, SIMULATION_TIME);
+        printf("Posição Robô (y1, y2):   (%.3f, %.3f)\n", y1, y2);
+        printf("Referência   (xref, yref): (%.3f, %.3f)\n", xref, yref);
+        printf("Orientação (theta):      %.3f rad\n\n", theta);
+        printf("--- Controle ---\n");
+        printf("alpha1: %.2f  (q: aumenta | a: diminui)\n", a1_val);
+        printf("alpha2: %.2f  (w: aumenta | s: diminui)\n", a2_val);
+        fflush(stdout); // Garante que o texto seja impresso imediatamente
+
+        // Grava no arquivo de log
         fprintf(output_file, "%f\t%f\t%f\t%f\t%f\t%f\n", t, y1, y2, theta, xref, yref);
         
         usleep(LOGGER_PERIOD_MS * 1000);
         write_timing_info(timing_file, &last_time);
     }
 
+    // --- Restaura as configurações do terminal ---
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    fcntl(STDIN_FILENO, F_SETFL, oldf);
+    // -------------------------------------------
+
     fclose(output_file);
     fclose(timing_file);
+    printf("\n\nInterface finalizada. Log salvo.\n");
     return NULL;
 }
