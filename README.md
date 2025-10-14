@@ -7,7 +7,7 @@ Neste terceiro trabalho, aleḿ das recomendações anteriores, também adicione
 
 sudo apt install python3-reportlab
 
-## LAB22
+## LAB2
 Para este segundo trabalho, a execução da simulação é o ponto mais importante. Portanto, o arquivo .txt do resultado da simulação é sempre gerado. Mas pra uma visualização mais conveniente, um gráfico usando o Pandas e o MatplotLib do Python vai auxiliar. Mas isso exige novos módulos que podem ser facilmente instalado usando:
 
 - sudo apt update
