@@ -87,4 +87,4 @@ $(OBJ_DIR)/%.o: $(TEST_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(BIN_DIR) $(OBJ_DIR) *.txt *.png
+	rm -rf $(BIN_DIR) $(OBJ_DIR) $(OUTPUT_DIR) *.txt *.png
