@@ -1,9 +1,7 @@
+# Makefile para Compilação e Testes do Projeto de Programação em Tempo Real
 CC = gcc
 CFLAGS = -g -Wall -Iinclude
-# Adicione -lpthread para linkar a biblioteca de threads
 LIBS = -lm -lpthread
-
-# Adicione o interpretador Python
 PYTHON = python3
 
 SRC_DIR = src
@@ -36,6 +34,10 @@ INTEGRATION_TEST_TARGET = $(BIN_DIR)/teste_integracao
 PLOT_TRAJECTORY = $(DISPLAY_SCRIPT_DIR)/plot_trajectory.py
 ANALYZE_TIMING = $(DISPLAY_SCRIPT_DIR)/analyze_timing.py
 
+# --- Regras Especiais ---
+.SPECIAL: .PRECIOUS
+.PRECIOUS: $(APP_TARGET)
+
 # --- Regras ---
 
 .PHONY: all test run-tests clean plot
@@ -61,7 +63,9 @@ analyze:
 	$(PYTHON) analyze_timing.py
 
 $(APP_TARGET): $(APP_MAIN_OBJ) $(LIB_OBJECTS)
+	@mkdir -p $(OBJ_DIR)
 	@mkdir -p $(BIN_DIR)
+	@mkdir -p $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(LIBS)
 	@echo "--- Executando a simulação...---"
 	./$(APP_TARGET)
@@ -83,4 +87,4 @@ $(OBJ_DIR)/%.o: $(TEST_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(BIN_DIR) $(OBJ_DIR) *.txt *.png
+	rm -rf $(BIN_DIR) $(OBJ_DIR) $(OUTPUT_DIR) *.txt *.png
