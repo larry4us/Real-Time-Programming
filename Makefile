@@ -1,9 +1,10 @@
-# Makefile para Compilação e Testes do Projeto de Programação em Tempo Real
+# Makefile - Lab 5 RTOS
 CC = gcc
 CFLAGS = -g -Wall -Iinclude
 LIBS = -lm -lpthread
 PYTHON = python3
 
+# Diretórios
 SRC_DIR = src
 TEST_DIR = tests
 BIN_DIR = bin
@@ -11,70 +12,60 @@ OBJ_DIR = obj
 DISPLAY_SCRIPT_DIR = displayScripts
 OUTPUT_DIR = output
 
-# --- Fontes da Biblioteca ---
+# Fontes e Objetos
 LIB_SOURCES = $(SRC_DIR)/matrixOperations.c $(SRC_DIR)/integration.c
 LIB_OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(LIB_SOURCES))
 
-# --- Aplicação Principal ---
-APP_MAIN_SRC = $(SRC_DIR)/main.c
 APP_MAIN_OBJ = $(OBJ_DIR)/main.o
 APP_TARGET = $(BIN_DIR)/app_final
 
-# --- Teste de Matrizes ---
-MATRIX_TEST_SRC = $(TEST_DIR)/matrixTests.c
-MATRIX_TEST_OBJ = $(OBJ_DIR)/matrixTests.o
 MATRIX_TEST_TARGET = $(BIN_DIR)/teste_matriz
-
-# --- Teste de Integração ---
-INTEGRATION_TEST_SRC = $(TEST_DIR)/integrationTests.c
-INTEGRATION_TEST_OBJ = $(OBJ_DIR)/integrationTests.o
 INTEGRATION_TEST_TARGET = $(BIN_DIR)/teste_integracao
 
-# --- Scripts para exibir os outputs ---
+# Scripts
 PLOT_TRAJECTORY = $(DISPLAY_SCRIPT_DIR)/plot_trajectory.py
 ANALYZE_TIMING = $(DISPLAY_SCRIPT_DIR)/analyze_timing.py
 
-# --- Regras Especiais ---
 .SPECIAL: .PRECIOUS
 .PRECIOUS: $(APP_TARGET)
 
-# --- Regras ---
+.PHONY: all run plot test run-tests clean
 
-.PHONY: all test run-tests clean plot
+# Padrão: Compila e Roda
+all: run
 
-all: $(APP_TARGET)
+# Regra de Execução (SUDO necessário para RTOS)
+run: $(APP_TARGET)
+	@echo ">>> Executando simulação RTOS (Sudo necessário)..."
+	sudo ./$(APP_TARGET)
 
-# NOVA REGRA: Roda a simulação e depois o script de plotagem
-plot: $(APP_TARGET)
-	@echo "--- Gerando o gráfico da trajetória ---"
+# --- CORREÇÃO: Plotagem independente ---
+# Agora 'plot' não depende mais de 'run'. 
+# Ele apenas processa os arquivos já existentes em 'output/'.
+plot:
+	@echo ">>> Gerando gráficos a partir dos logs existentes..."
 	$(PYTHON) $(PLOT_TRAJECTORY)
 	$(PYTHON) $(ANALYZE_TIMING)
 
+# Regras de Teste
 test: $(MATRIX_TEST_TARGET) $(INTEGRATION_TEST_TARGET)
 
 run-tests: test
-	@echo "--- Rodando Testes de Matriz ---"
+	@echo ">>> Rodando Testes..."
 	./$(MATRIX_TEST_TARGET)
-	@echo "\n--- Rodando Testes de Integracao ---"
 	./$(INTEGRATION_TEST_TARGET)
 
-analyze:
-	@echo "--- Gerando a tabela de análise de tempo ---"
-	$(PYTHON) analyze_timing.py
-
+# Regras de Compilação
 $(APP_TARGET): $(APP_MAIN_OBJ) $(LIB_OBJECTS)
-	@mkdir -p $(OBJ_DIR)
-	@mkdir -p $(BIN_DIR)
-	@mkdir -p $(OUTPUT_DIR)
+	@mkdir -p $(BIN_DIR) $(OUTPUT_DIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(LIBS)
-	@echo "--- Executando a simulação...---"
-	./$(APP_TARGET)
+	@echo ">>> Build concluído."
 
-$(MATRIX_TEST_TARGET): $(MATRIX_TEST_OBJ) $(OBJ_DIR)/matrixOperations.o
+$(MATRIX_TEST_TARGET): $(OBJ_DIR)/matrixTests.o $(OBJ_DIR)/matrixOperations.o
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(LIBS)
 
-$(INTEGRATION_TEST_TARGET): $(INTEGRATION_TEST_OBJ) $(OBJ_DIR)/integration.o
+$(INTEGRATION_TEST_TARGET): $(OBJ_DIR)/integrationTests.o $(OBJ_DIR)/integration.o
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(LIBS)
 

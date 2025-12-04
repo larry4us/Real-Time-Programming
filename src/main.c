@@ -9,6 +9,8 @@
 #include <time.h>
 #include <termios.h> // Para controle do terminal
 #include <fcntl.h>   // Para controle de arquivos
+#include <sched.h>
+#include <sys/mman.h>
 
 // --- Constantes da Simulação ---
 #define SIMULATION_TIME 20.0
@@ -69,8 +71,29 @@ void* control_thread(void* arg);
 void* ref_model_x_thread(void* arg);
 void* ref_model_y_thread(void* arg);
 void* reference_generation_thread(void* arg);
-// void* logger_thread(void* arg);
 void* user_interface_thread(void* arg);
+
+// --- Helpers de Tempo (Estilo Swift Extension) ---
+
+// Adiciona milissegundos a um timespec, tratando overflow de nanosegundos
+void timespec_add_ms(struct timespec *t, long ms) {
+    t->tv_sec += ms / 1000;
+    t->tv_nsec += (ms % 1000) * 1000000;
+    if (t->tv_nsec >= 1000000000) {
+        t->tv_nsec -= 1000000000;
+        t->tv_sec++;
+    }
+}
+
+// Configura prioridade (sched_setscheduler wrapper)
+void configure_rt_thread(pthread_attr_t *attr, int priority) {
+    struct sched_param param;
+    pthread_attr_init(attr);
+    pthread_attr_setinheritsched(attr, PTHREAD_EXPLICIT_SCHED); 
+    pthread_attr_setschedpolicy(attr, SCHED_FIFO); 
+    param.sched_priority = priority;
+    pthread_attr_setschedparam(attr, &param);
+}
 
 void write_timing_info(FILE* file, struct timespec* last_time) {
     struct timespec current_spec;
@@ -84,13 +107,33 @@ void write_timing_info(FILE* file, struct timespec* last_time) {
     *last_time = current_spec;
 }
 
+// Executa cálculos intensos pra simular uma carga de trabalho na CPU.
+// (Pode ser chamada dentro das threads se quiser testar carga interna)
+void simulate_load(long duration_ms) {
+    long iterations = duration_ms * 10000; 
+    double result = 0.0;
+    for (long i = 0; i < iterations; i++) {
+        result += sin(i) * tan(i);
+    }
+}
+
 // --- Função Principal ---
 int main() {
     pthread_t tid_robot, tid_linear, tid_control, tid_ref_x, tid_ref_y, tid_ref_gen, tid_logger;
+    
+    pthread_attr_t attr_robot, attr_linear, attr_control;
+    pthread_attr_t attr_ref_x, attr_ref_y, attr_ref_gen, attr_logger;
+
+    // 1. Bloqueio de Memória (Page Fault Prevention)
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) {
+        perror("AVISO: Falha ao bloquear memória (mlockall). Execute com SUDO para comportamento RT real.");
+    } else {
+        printf("Memória bloqueada com sucesso (RT Safe).\n");
+    }
 
     // Inicialização das variáveis
-    x_state = createMatrix(3, 1); // [xc, yc, theta]
-    y_output = createMatrix(2, 1); // [y1, y2]
+    x_state = createMatrix(3, 1); 
+    y_output = createMatrix(2, 1); 
     v_input = createMatrix(2, 1);
     u_input = createMatrix(2, 1);
     ym_output = createMatrix(2, 1);
@@ -108,21 +151,36 @@ int main() {
     pthread_mutex_init(&ref_input_mutex, NULL);
     pthread_mutex_init(&alpha_mutex, NULL);
 
-    // Criação das Threads
-    pthread_create(&tid_ref_gen, NULL, reference_generation_thread, NULL);
-    pthread_create(&tid_ref_x, NULL, ref_model_x_thread, NULL);
-    pthread_create(&tid_ref_y, NULL, ref_model_y_thread, NULL);
-    pthread_create(&tid_control, NULL, control_thread, NULL);
-    pthread_create(&tid_linear, NULL, linearization_thread, NULL);
-    pthread_create(&tid_robot, NULL, robot_simulation_thread, NULL);
-    //pthread_create(&tid_logger, NULL, logger_thread, NULL);
-    pthread_create(&tid_logger, NULL, user_interface_thread, NULL);
+    // 2. Definição de Prioridades (RMS)
+    configure_rt_thread(&attr_robot, 80);      // 30ms
+    configure_rt_thread(&attr_linear, 70);     // 40ms
+    configure_rt_thread(&attr_control, 60);    // 50ms
+    configure_rt_thread(&attr_ref_x, 60);      // 50ms
+    configure_rt_thread(&attr_ref_y, 60);      // 50ms
+    configure_rt_thread(&attr_logger, 30);     // 100ms (UI)
+    configure_rt_thread(&attr_ref_gen, 20);    // 120ms
 
-    // Aguarda o término das threads
+    printf("Iniciando threads com escalonamento SCHED_FIFO e Loop Temporal Absoluto...\n");
+
+    pthread_create(&tid_ref_gen, &attr_ref_gen, reference_generation_thread, NULL);
+    pthread_create(&tid_ref_x, &attr_ref_x, ref_model_x_thread, NULL);
+    pthread_create(&tid_ref_y, &attr_ref_y, ref_model_y_thread, NULL);
+    pthread_create(&tid_control, &attr_control, control_thread, NULL);
+    pthread_create(&tid_linear, &attr_linear, linearization_thread, NULL);
+    pthread_create(&tid_robot, &attr_robot, robot_simulation_thread, NULL);
+    pthread_create(&tid_logger, &attr_logger, user_interface_thread, NULL);
+
     pthread_join(tid_logger, NULL);
-    // As outras threads são terminadas quando a simulação acaba
 
-    // Liberação de recursos
+    // Cleanup
+    pthread_attr_destroy(&attr_robot);
+    pthread_attr_destroy(&attr_linear);
+    pthread_attr_destroy(&attr_control);
+    pthread_attr_destroy(&attr_ref_x);
+    pthread_attr_destroy(&attr_ref_y);
+    pthread_attr_destroy(&attr_ref_gen);
+    pthread_attr_destroy(&attr_logger);
+
     freeMatrix(x_state);
     freeMatrix(y_output);
     freeMatrix(v_input);
@@ -130,6 +188,7 @@ int main() {
     freeMatrix(ym_output);
     freeMatrix(ym_dot_output);
     freeMatrix(ref_input);
+    
     pthread_mutex_destroy(&time_mutex);
     pthread_mutex_destroy(&x_state_mutex);
     pthread_mutex_destroy(&y_output_mutex);
@@ -144,27 +203,18 @@ int main() {
     return 0;
 }
 
-// --- Implementação das Threads ---
-
-// Executa cálculos intensos pra simular uma carga de trabalho na CPU.
-void simulate_load(long duration_ms) {
-    long iterations = duration_ms * 10000; // Ajuste conforme necessário. Depende do hardware de quem está executando
-    double result = 0.0;
-    for (long i = 0; i < iterations; i++) {
-        result += sin(i) * tan(i);
-    }
-}
+// --- Implementação das Threads com Loop Absoluto ---
 
 void* reference_generation_thread(void* arg) {
     FILE* timing_file = fopen("output/ref_gen_timing.txt", "w");
-    if (!timing_file) {
-        perror("Erro ao abrir o arquivo de timing da geração de referência");
-        return NULL;
-    }
-    struct timespec last_time;
-    clock_gettime(CLOCK_MONOTONIC, &last_time);
-
+    if (!timing_file) return NULL;
     fprintf(timing_file, "T(k)\n");
+
+    struct timespec next_wake_time;
+    struct timespec last_time; // Apenas para log estatístico
+    
+    clock_gettime(CLOCK_MONOTONIC, &next_wake_time);
+    last_time = next_wake_time;
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&time_mutex);
@@ -179,7 +229,10 @@ void* reference_generation_thread(void* arg) {
         ref_input->data[1][0] = yref_val;
         pthread_mutex_unlock(&ref_input_mutex);
 
-        usleep(REFERENCE_GEN_PERIOD_MS * 1000);
+        // Lógica de Tempo Absoluto
+        timespec_add_ms(&next_wake_time, REFERENCE_GEN_PERIOD_MS);
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake_time, NULL);
+        
         write_timing_info(timing_file, &last_time);
     }
     fclose(timing_file);
@@ -188,17 +241,17 @@ void* reference_generation_thread(void* arg) {
 
 void* ref_model_x_thread(void* arg) {
     FILE* timing_file = fopen("output/ref_model_x_timing.txt", "w");
-    if (!timing_file) {
-        perror("Erro ao abrir o arquivo de timing do modelo de referência X");
-        return NULL;
-    }
+    if (!timing_file) return NULL;
+    fprintf(timing_file, "T(k)\n");
+
+    struct timespec next_wake_time;
     struct timespec last_time;
-    clock_gettime(CLOCK_MONOTONIC, &last_time);
+    
+    clock_gettime(CLOCK_MONOTONIC, &next_wake_time);
+    last_time = next_wake_time;
 
     double ymx = 0.0;
     double dt = REF_MODEL_X_PERIOD_MS / 1000.0;
-
-    fprintf(timing_file, "T(k)\n");
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&ref_input_mutex);
@@ -220,7 +273,10 @@ void* ref_model_x_thread(void* arg) {
         ym_dot_output->data[0][0] = ymx_dot;
         pthread_mutex_unlock(&ym_dot_output_mutex);
 
-        usleep(REF_MODEL_X_PERIOD_MS * 1000);
+        // Lógica de Tempo Absoluto
+        timespec_add_ms(&next_wake_time, REF_MODEL_X_PERIOD_MS);
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake_time, NULL);
+        
         write_timing_info(timing_file, &last_time);
     }
     fclose(timing_file);
@@ -229,14 +285,14 @@ void* ref_model_x_thread(void* arg) {
 
 void* ref_model_y_thread(void* arg) {
     FILE* timing_file = fopen("output/ref_model_y_timing.txt", "w");
-    if (!timing_file) {
-        perror("Erro ao abrir o arquivo de timing do modelo de referência Y");
-        return NULL;
-    }
-    struct timespec last_time;
-    clock_gettime(CLOCK_MONOTONIC, &last_time);
-    
+    if (!timing_file) return NULL;
     fprintf(timing_file, "T(k)\n");
+
+    struct timespec next_wake_time;
+    struct timespec last_time;
+
+    clock_gettime(CLOCK_MONOTONIC, &next_wake_time);
+    last_time = next_wake_time;
 
     double ymy = 0.0;
     double dt = REF_MODEL_Y_PERIOD_MS / 1000.0;
@@ -261,7 +317,10 @@ void* ref_model_y_thread(void* arg) {
         ym_dot_output->data[1][0] = ymy_dot;
         pthread_mutex_unlock(&ym_dot_output_mutex);
 
-        usleep(REF_MODEL_Y_PERIOD_MS * 1000);
+        // Lógica de Tempo Absoluto
+        timespec_add_ms(&next_wake_time, REF_MODEL_Y_PERIOD_MS);
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake_time, NULL);
+        
         write_timing_info(timing_file, &last_time);
     }
     fclose(timing_file);
@@ -270,14 +329,14 @@ void* ref_model_y_thread(void* arg) {
 
 void* control_thread(void* arg) {
     FILE* timing_file = fopen("output/control_timing.txt", "w");
-    if (!timing_file) {
-        perror("Erro ao abrir o arquivo de timing do controle");
-        return NULL;
-    }
-    struct timespec last_time;
-    clock_gettime(CLOCK_MONOTONIC, &last_time);
-
+    if (!timing_file) return NULL;
     fprintf(timing_file, "T(k)\n");
+
+    struct timespec next_wake_time;
+    struct timespec last_time;
+
+    clock_gettime(CLOCK_MONOTONIC, &next_wake_time);
+    last_time = next_wake_time;
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&y_output_mutex);
@@ -308,7 +367,10 @@ void* control_thread(void* arg) {
         v_input->data[1][0] = v2;
         pthread_mutex_unlock(&v_input_mutex);
 
-        usleep(CONTROL_PERIOD_MS * 1000);
+        // Lógica de Tempo Absoluto
+        timespec_add_ms(&next_wake_time, CONTROL_PERIOD_MS);
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake_time, NULL);
+        
         write_timing_info(timing_file, &last_time);
     }
     fclose(timing_file);
@@ -317,14 +379,14 @@ void* control_thread(void* arg) {
 
 void* linearization_thread(void* arg) {
     FILE* timing_file = fopen("output/linearization_timing.txt", "w");
-    if (!timing_file) {
-        perror("Erro ao abrir o arquivo de timing da linearização");
-        return NULL;
-    }
-    struct timespec last_time;
-    clock_gettime(CLOCK_MONOTONIC, &last_time);
-
+    if (!timing_file) return NULL;
     fprintf(timing_file, "T(k)\n");
+
+    struct timespec next_wake_time;
+    struct timespec last_time;
+
+    clock_gettime(CLOCK_MONOTONIC, &next_wake_time);
+    last_time = next_wake_time;
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&x_state_mutex);
@@ -359,7 +421,10 @@ void* linearization_thread(void* arg) {
         freeMatrix(L);
         freeMatrix(v);
 
-        usleep(LINEARIZATION_PERIOD_MS * 1000);
+        // Lógica de Tempo Absoluto
+        timespec_add_ms(&next_wake_time, LINEARIZATION_PERIOD_MS);
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake_time, NULL);
+        
         write_timing_info(timing_file, &last_time);
     }
     fclose(timing_file);
@@ -368,16 +433,16 @@ void* linearization_thread(void* arg) {
 
 void* robot_simulation_thread(void* arg) {
     FILE* timing_file = fopen("output/robot_sim_timing.txt", "w");
-    if (!timing_file) {
-        perror("Erro ao abrir o arquivo de timing do robô");
-        return NULL;
-    }
+    if (!timing_file) return NULL;
+    fprintf(timing_file, "T(k)\n");
+
+    struct timespec next_wake_time;
     struct timespec last_time;
-    clock_gettime(CLOCK_MONOTONIC, &last_time);
+
+    clock_gettime(CLOCK_MONOTONIC, &next_wake_time);
+    last_time = next_wake_time;
     
     double dt = ROBOT_SIM_PERIOD_MS / 1000.0;
-
-    fprintf(timing_file, "T(k)\n");
 
     while (current_time < SIMULATION_TIME) {
         pthread_mutex_lock(&u_input_mutex);
@@ -427,7 +492,10 @@ void* robot_simulation_thread(void* arg) {
         current_time += dt;
         pthread_mutex_unlock(&time_mutex);
 
-        usleep(ROBOT_SIM_PERIOD_MS * 1000);
+        // Lógica de Tempo Absoluto (Determinismo)
+        timespec_add_ms(&next_wake_time, ROBOT_SIM_PERIOD_MS);
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake_time, NULL);
+        
         write_timing_info(timing_file, &last_time);
     }
     fclose(timing_file);
@@ -436,18 +504,17 @@ void* robot_simulation_thread(void* arg) {
 
 void* user_interface_thread(void* arg) {
     FILE* output_file = fopen("output/simulation_output.txt", "w");
-    if (!output_file) {
-        perror("Erro ao abrir o arquivo de saída");
-        return NULL;
-    }
-    //fprintf(output_file, "t\ty1\ty2\ttheta\txref\tyref\n");
+    if (!output_file) return NULL;
     fprintf(output_file, "t\tx\ty\ttheta\txref\tyref\n");
 
     FILE* timing_file = fopen("output/logger_timing.txt", "w");
     fprintf(timing_file, "T(k)\n");
     
+    struct timespec next_wake_time;
     struct timespec last_time;
-    clock_gettime(CLOCK_MONOTONIC, &last_time);
+
+    clock_gettime(CLOCK_MONOTONIC, &next_wake_time);
+    last_time = next_wake_time;
 
     // --- Configuração do terminal para leitura não bloqueante ---
     struct termios oldt, newt;
@@ -462,7 +529,7 @@ void* user_interface_thread(void* arg) {
     // ---------------------------------------------------------
 
     while (current_time < SIMULATION_TIME) {
-        // --- Leitura do teclado para alterar alphas ---
+        // --- Leitura do teclado ---
         ch = getchar();
         if (ch != EOF) {
             pthread_mutex_lock(&alpha_mutex);
@@ -498,20 +565,23 @@ void* user_interface_thread(void* arg) {
 
         // --- Exibição na Tela ---
         printf("\033[H\033[J"); // Limpa o console
-        printf("--- Simulação Robô Lab 3 ---\n");
+        printf("--- Simulação Robô Lab 5 (RTOS) ---\n");
         printf("Tempo: %.2f / %.2f s\n\n", t, SIMULATION_TIME);
-        printf("Posição Robô (y1, y2):   (%.3f, %.3f)\n", y1, y2);
+        printf("Posição Robô (x, y):     (%.3f, %.3f)\n", y1, y2);
         printf("Referência   (xref, yref): (%.3f, %.3f)\n", xref, yref);
         printf("Orientação (theta):      %.3f rad\n\n", theta);
         printf("--- Controle ---\n");
         printf("alpha1: %.2f  (q: aumenta | a: diminui)\n", a1_val);
         printf("alpha2: %.2f  (w: aumenta | s: diminui)\n", a2_val);
-        fflush(stdout); // Garante que o texto seja impresso imediatamente
+        fflush(stdout); 
 
         // Grava no arquivo de log
         fprintf(output_file, "%f\t%f\t%f\t%f\t%f\t%f\n", t, y1, y2, theta, xref, yref);
         
-        usleep(LOGGER_PERIOD_MS * 1000);
+        // Lógica de Tempo Absoluto
+        timespec_add_ms(&next_wake_time, LOGGER_PERIOD_MS);
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake_time, NULL);
+        
         write_timing_info(timing_file, &last_time);
     }
 
