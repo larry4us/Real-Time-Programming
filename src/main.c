@@ -73,8 +73,6 @@ void* ref_model_y_thread(void* arg);
 void* reference_generation_thread(void* arg);
 void* user_interface_thread(void* arg);
 
-// --- Helpers de Tempo (Estilo Swift Extension) ---
-
 // Adiciona milissegundos a um timespec, tratando overflow de nanosegundos
 void timespec_add_ms(struct timespec *t, long ms) {
     t->tv_sec += ms / 1000;
@@ -107,8 +105,8 @@ void write_timing_info(FILE* file, struct timespec* last_time) {
     *last_time = current_spec;
 }
 
-// Executa cálculos intensos pra simular uma carga de trabalho na CPU.
-// (Pode ser chamada dentro das threads se quiser testar carga interna)
+// Antiga função de simulação de carga
+// Agora a forma que estou usando no trabalho é o stress da CPU via terminal.
 void simulate_load(long duration_ms) {
     long iterations = duration_ms * 10000; 
     double result = 0.0;
@@ -117,7 +115,6 @@ void simulate_load(long duration_ms) {
     }
 }
 
-// --- Função Principal ---
 int main() {
     pthread_t tid_robot, tid_linear, tid_control, tid_ref_x, tid_ref_y, tid_ref_gen, tid_logger;
     
@@ -203,7 +200,7 @@ int main() {
     return 0;
 }
 
-// --- Implementação das Threads com Loop Absoluto ---
+// --- Implementação das Threads ---
 
 void* reference_generation_thread(void* arg) {
     FILE* timing_file = fopen("output/ref_gen_timing.txt", "w");
@@ -516,7 +513,7 @@ void* user_interface_thread(void* arg) {
     clock_gettime(CLOCK_MONOTONIC, &next_wake_time);
     last_time = next_wake_time;
 
-    // --- Configuração do terminal para leitura não bloqueante ---
+    // --- Configuração do terminal para leitura ---
     struct termios oldt, newt;
     int ch;
     int oldf;
@@ -526,7 +523,6 @@ void* user_interface_thread(void* arg) {
     tcsetattr(STDIN_FILENO, TCSANOW, &newt);
     oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
     fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
-    // ---------------------------------------------------------
 
     while (current_time < SIMULATION_TIME) {
         // --- Leitura do teclado ---
@@ -588,7 +584,6 @@ void* user_interface_thread(void* arg) {
     // --- Restaura as configurações do terminal ---
     tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
     fcntl(STDIN_FILENO, F_SETFL, oldf);
-    // -------------------------------------------
 
     fclose(output_file);
     fclose(timing_file);
