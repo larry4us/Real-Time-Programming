@@ -2,7 +2,7 @@
 
 Trabalhos feitos pra matéria de Programacao em Tempo Real, no intuito de aprender sobre sistemas RTOS.
 
-# LAB5 — Execução em RTOS e Comparação com GPOS
+# LAB5
 
 Neste quinto trabalho, o código do sistema de controle distribuído foi adaptado para operar em um ambiente de Tempo Real, permitindo uma comparação direta entre:
 
